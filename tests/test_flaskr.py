@@ -144,6 +144,50 @@ class TestFlaskr:
             # the database state is not guaranteed. In a real-world scenario,
             # you might want to set up a known database state before running this test.
 
+    def test_remove_entry(self):
+        """
+        Test the remove_entry function to ensure it correctly removes an entry from the database.
+        """
+        with app.test_client() as client:
+            # First, login
+            auth = AuthActions(client)
+            auth.login()
+            
+            # Add a test entry
+            client.post('/add', data=dict(
+                title='Test Entry to Remove',
+                text='This entry will be removed'
+            ), follow_redirects=True)
+            
+            # Get the entries to find the ID of the entry we just added
+            with app.app_context():
+                db = get_db()
+                entry = db.execute('SELECT id FROM entries WHERE title = ?', 
+                                  ['Test Entry to Remove']).fetchone()
+                
+                if entry:
+                    # Now try to remove the entry
+                    response = client.post(f'/remove/{entry["id"]}', follow_redirects=True)
+                    
+                    # Check if the response indicates success
+                    assert response.status_code == 200
+                    assert b'Entry was successfully removed' in response.data
+                    
+                    # Verify the entry is no longer in the database
+                    check = db.execute('SELECT * FROM entries WHERE id = ?', 
+                                      [entry["id"]]).fetchone()
+                    assert check is None
+    
+    def test_remove_entry_unauthorized(self):
+        """
+        Test that unauthorized users cannot remove entries.
+        """
+        with app.test_client() as client:
+            # Try to remove an entry without logging in
+            response = client.post('/remove/1', follow_redirects=True)
+            
+            # Should get a 401 Unauthorized response
+            assert response.status_code == 401
 
 
 class AuthActions(object):
